@@ -1,7 +1,9 @@
-﻿using DCEAssignment.Models;
+﻿using DCEAssignment.Data;
+using DCEAssignment.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Data;
+using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 
 namespace DCEAssignment.Controllers
@@ -10,55 +12,33 @@ namespace DCEAssignment.Controllers
     [ApiController]
     public class OrderController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
+        private readonly IOrderRepository _orderRepository;
 
-        public OrderController(IConfiguration configuration)
+        public OrderController(IOrderRepository orderRepository)
         {
-            _configuration = configuration;
+            _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
         }
 
         [HttpGet]
         [Route("GetActiveOrdersByCustomer/{customerId}")]
         public IActionResult GetActiveOrdersByCustomer(int customerId)
         {
-            string connectionString = _configuration.GetConnectionString("DefaultConnection")!;
-
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                return BadRequest("Connection string 'DefaultConnection' is null or empty.");
-            }
-
             try
             {
-                using SqlConnection conn = new SqlConnection(connectionString);
-                conn.Open();
-
-                SqlCommand cmd = new SqlCommand("GetActiveOrdersByCustomer", conn);
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@CustomerId", customerId);
-
-                SqlDataAdapter adapter = new SqlDataAdapter(cmd);
-                DataTable dataTable = new DataTable();
-                adapter.Fill(dataTable);
-
-                List<OrderModel> orders = new List<OrderModel>();
-
-                foreach (DataRow row in dataTable.Rows)
+                IEnumerable<OrderModel> orders = _orderRepository.GetActiveOrdersByCustomer(customerId);
+                if (orders == null || !orders.Any())
                 {
-                    OrderModel order = new OrderModel
-                    {
-                        OrderId = Convert.ToInt32(row["OrderId"]),
-                        UnitPrice = Convert.ToDecimal(row["UnitPrice"]),
-                        ProductName = row["ProductName"]?.ToString() ?? "",
-                        Username = row["Username"]?.ToString() ?? "",
-                        OrderedOn = Convert.ToDateTime(row["OrderedOn"]),
-                        OrderType = Convert.ToByte(row["OrderType"])
-                    };
-
-                    orders.Add(order);
+                    return NotFound($"No active orders found for customer with UserId {customerId}.");
                 }
-
                 return Ok(orders);
+            }
+            catch (ArgumentException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (SqlException ex) 
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, $"Database error: {ex.Message}");
             }
             catch (Exception ex)
             {
