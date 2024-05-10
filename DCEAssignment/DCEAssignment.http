@@ -1,0 +1,6 @@
+@DCEAssignment_HostAddress = http://localhost:5007
+
+GET {{DCEAssignment_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
